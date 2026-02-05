@@ -1,98 +1,82 @@
-/*
- * @file: app.js
- * @description: It Contain server setup functions.
- * @author: Sandip Vaghasiya
- */
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const multer = require('multer');
+const connectDB = require('./db/connection');
+const apiV1Router = require('./api/v1/web');  
+const { ensureDefaultCategories } = require('./controllers/categoryController');
+require('dotenv').config();
 
-require("dotenv").config({ path: ".env" });
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const path = require("path");
-const swaggerUi = require("swagger-ui-express");
-const logger = require("morgan");
-const db = require("./db/index");
-const swaggerJsDocsWeb = require("./config/swagger/swagger-config-web");
-const { failAction } = require("./utilities/response");
-
-/**Start import routes */
-const webRoutes = require("./api/index");
-/**End import routes */
-
-const env = process.env.NODE_ENV ? process.env.NODE_ENV : "dev";
-const port = process.env.PORT ? process.env.PORT : 7000;
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Access-Control-Allow-Origin
-app.use(
-  cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-  })
-);
 
-app.use(logger("dev"));
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use(
-  bodyParser.json({
-    limit: "50mb",
-  })
-);
+// API routes
+app.use('/api/v1', apiV1Router);
+  
 
-app.use(
-  bodyParser.urlencoded({
-    limit: "50mb",
-    parameterLimit: 100000,
-    extended: true,
-  })
-);
+// Health check
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API running',
+    version: 'v1',
+    health: '/api/v1/health',
+  });
+});
 
-// app.use(express.static("public"));
-app.use(express.static(path.join(__dirname, "public")));
-var options = {};
-
-app.use(
-  "/web-api-docs",
-  swaggerUi.serveFiles(swaggerJsDocsWeb, options),
-  swaggerUi.setup(swaggerJsDocsWeb)
-);
-
-/*********** All Routes ********************/
-
-app.use("/api", webRoutes);
+// Error handling
 app.use((err, req, res, next) => {
-  if (err && err.error && err.error.isJoi) {
-    // we had a joi error, let's return a custom 400 json response
-    res
-      .status(400)
-      .json(failAction(err.error.message.toString().replace(/[\""]+/g, "")));
-  } else {
-    // pass on to another error handler
-    next(err);
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ success: false, message: 'File too large', error: 'File too large' });
+    }
+    return res.status(400).json({ success: false, message: err.message, error: err.message });
   }
+
+  if (err && typeof err.message === 'string') {
+    const msg = err.message;
+    if (
+      msg.includes('Only image files are allowed') ||
+      msg.includes('Only images allowed') ||
+      msg.includes('Only video files allowed') ||
+      msg.includes('Invalid file type')
+    ) {
+      return res.status(400).json({ success: false, message: msg, error: msg });
+    }
+  }
+
+  console.error(err.stack || err);
+  res.status(500).json({ success: false, message: 'Server error', error: err?.message || 'Server error' });
 });
 
-process.on("uncaughtException", (err) => {
-  console.log(`Uncaught Exception: ${err.message}`);
-  process.exit(1);
+app.use('*', (req, res) => {
+  res.status(404).json({ success: false, message: 'Route not found', path: req.originalUrl });
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.log("Unhandled rejection at ", promise, `reason: ${err.message}`);
-  process.exit(1);
+const start = async () => {
+  await connectDB();
+  app.listen(PORT, () => {
+  console.log(`🚀 Server on ${PORT}`);
+  console.log(`📁 Uploads: ${path.join(__dirname, 'uploads')}`);
+  console.log('📋 Endpoints:');
+   console.log('POST /api/v1/auth/register', apiV1Router );
+  console.log('POST /api/v1/auth/register');
+  console.log('POST /api/v1/auth/login');
+  console.log('GET  /api/v1/auth/users');
+  console.log('POST /api/v1/videos/upload');
+  console.log('GET  /api/v1/videos/my');
+});
+};
+ console.log("ENV CHECK:", {
+  MONGO_URI: process.env.MONGO_URI ? "FOUND" : "MISSING",
+  PORT: process.env.PORT,
 });
 
-app.get("/", (req, res) =>
-  res.send(`<h1>Resimpli App ${env} environment</h1>`)
-);
-
-app.get("/test", (req, res) =>
-  res.send("<h2>Hello Admin <br> How Are You ?</h2>")
-);
-
-app.listen(port, function () {
-  console.log(
-    `Express server listening on port ${port} and worker ${process.pid}`
-  );
-});
+start();

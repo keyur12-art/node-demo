@@ -1,14 +1,21 @@
-/*
- * @file: index.js
- * @description: It's combine all routers.
- * @author: Sandip Vaghasiya
- */
-const { Router } = require("express");
-const app = Router();
+const express = require('express');
+const router = express.Router();
 
-const contractor = require("./contractor");
+// Auth routes
+router.use('/auth', require('./auth'));
 
-/*********** Combine all Routes ********************/
-app.use("/contractor", contractor);
+// Category routes
+router.use('/categories', require('./categories'));
 
-module.exports = app;
+// Video routes
+router.use('/', require('./videos'));
+
+// Dashboard routes
+router.use('/dashboard', require('../../../routes/dashboard'));
+
+// Health check
+router.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+module.exports = router;
